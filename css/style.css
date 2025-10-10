@@ -1,0 +1,106 @@
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+#map {
+    width: 100%;
+    height: calc(100vh - 56px); /* Adjust height to account for navbar */
+}
+
+#map-tab, #config-tab {
+    width: 100%;
+    height: calc(100vh - 56px);
+}
+
+/* Custom Marker Styles */
+.custom-div-icon .marker-pin {
+    width: 30px;
+    height: 30px;
+    border-radius: 50% 50% 50% 0;
+    position: absolute;
+    transform: rotate(-45deg);
+    left: 50%;
+    top: 50%;
+    margin: -15px 0 0 -15px;
+    background-size: 100%;
+}
+
+.custom-div-icon .marker-pin::after {
+    content: '';
+    width: 14px;
+    height: 14px;
+    margin: 8px 0 0 8px;
+    background: #ffffff;
+    position: absolute;
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* Type-based colors */
+.custom-div-icon.importante .marker-pin {
+    background-color: #e74c3c; /* Red */
+}
+
+.custom-div-icon.novedad .marker-pin {
+    background-color: #f1c40f; /* Yellow */
+}
+
+.custom-div-icon.rutina .marker-pin {
+    background-color: #3498db; /* Blue */
+}
+
+/* Default color if type is not set */
+.custom-div-icon:not(.importante):not(.novedad):not(.rutina) .marker-pin {
+    background-color: #3498db; /* Default to blue */
+}
+
+/* Popup Photo Styles */
+.popup-photos-flex-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.photo-thumbnail-container {
+    flex: 1 1 70px;
+    max-width: 80px;
+    height: 70px;
+    overflow: hidden;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    position: relative;
+}
+
+.popup-photo-thumbnail {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.2s ease-in-out, z-index 0s 0.1s;
+    cursor: pointer;
+}
+
+
+/* New styles for click-to-enlarge modal */
+.enlarged-photo-view {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000; /* Above everything */
+    cursor: pointer;
+}
+
+.enlarged-photo-view img {
+    max-width: 90%;
+    max-height: 90%;
+    border: 3px solid white;
+    border-radius: 5px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+}
