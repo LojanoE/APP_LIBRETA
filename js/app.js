@@ -30,6 +30,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedFolderPath = localStorage.getItem('selectedFolderPath');
         if (savedFolderPath) {
             document.getElementById('selected-folder-path').value = savedFolderPath;
+            
+            // Show a notification to the user that a previous folder was detected
+            setTimeout(() => {
+                const savedFilesCount = localStorage.getItem('selectedFolderFilesCount');
+                if (savedFilesCount && savedFilesCount > 0) {
+                    const reminderDiv = document.createElement('div');
+                    reminderDiv.className = 'alert alert-info mt-2';
+                    reminderDiv.id = 'folder-reminder';
+                    reminderDiv.innerHTML = `
+                        <i class="fas fa-info-circle"></i> 
+                        Se detectó una carpeta previamente seleccionada: <strong>${savedFolderPath}</strong>
+                        (${savedFilesCount} archivos ZIP). 
+                        Puedes hacer clic en <strong>Actualizar</strong> para volver a cargarla si agregaste nuevos archivos.
+                    `;
+                    
+                    // Find the config tab content and add the reminder
+                    const configTab = document.getElementById('config-tab');
+                    if (configTab) {
+                        configTab.insertBefore(reminderDiv, configTab.firstChild);
+                    }
+                }
+            }, 1000);
         }
 
         // Variables to store folder files
@@ -160,8 +182,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('map').style.height = 'calc(100vh - 56px)';
         } else if (tabName === 'filters') {
             document.getElementById('filters-tab').style.display = 'block';
-            // Actualizar el selector de workfronts con los disponibles
+            // Actualizar los selectores con los disponibles
             updateWorkfrontOptions();
+            updateTagOptions();
         } else if (tabName === 'config') {
             document.getElementById('config-tab').style.display = 'block';
         }
@@ -200,11 +223,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
+    // Function to update the tag options in the filter dropdown
+    function updateTagOptions() {
+        const tagSelect = document.getElementById('tag-select');
+        // Clear existing options except the first one
+        tagSelect.innerHTML = '<option value="">Todos los Tags</option>';
+        
+        // Get unique tags from allData
+        const tags = [...new Set(allData.map(item => item.tag).filter(tag => tag))];
+        tags.sort(); // Sort alphabetically
+        
+        // Add options to the select
+        tags.forEach(tag => {
+            const option = document.createElement('option');
+            option.value = tag;
+            option.textContent = tag;
+            tagSelect.appendChild(option);
+        });
+    }
+    
     // Function to apply filters
     function applyFilters() {
         const datetimeFrom = document.getElementById('datetime-from').value;
         const datetimeTo = document.getElementById('datetime-to').value;
         const workfrontValue = document.getElementById('workfront-select').value;
+        const tagValue = document.getElementById('tag-select').value;
         
         // Start with all data
         filteredData = [...allData];
@@ -237,6 +280,11 @@ document.addEventListener('DOMContentLoaded', () => {
             filteredData = filteredData.filter(item => item.workFront === workfrontValue);
         }
         
+        // Apply tag filter
+        if (tagValue) {
+            filteredData = filteredData.filter(item => item.tag === tagValue);
+        }
+        
         // Update the map with filtered data
         addMarkers(filteredData, currentImageWidth, currentImageHeight);
         updateFilterResults();
@@ -262,6 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('datetime-from').value = '';
         document.getElementById('datetime-to').value = '';
         document.getElementById('workfront-select').value = '';
+        document.getElementById('tag-select').value = '';
         filteredData = [...allData]; // Reset to all data
         addMarkers(filteredData, currentImageWidth, currentImageHeight);
         updateFilterResults();
@@ -276,6 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('datetime-from').addEventListener('change', applyFilters);
         document.getElementById('datetime-to').addEventListener('change', applyFilters);
         document.getElementById('workfront-select').addEventListener('change', applyFilters);
+        document.getElementById('tag-select').addEventListener('change', applyFilters);
     }
     
     // Function to refresh the data from the selected folder
@@ -445,10 +495,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Save folder path and file info to localStorage
                 localStorage.setItem('selectedFolderPath', folderPath);
                 localStorage.setItem('selectedFolderFilesCount', files.length);
+                
+                // Store the file names for reference (not the actual files due to security restrictions)
+                const fileNames = files.map(file => file.name);
+                localStorage.setItem('selectedFolderFileNames', JSON.stringify(fileNames));
             } else {
                 document.getElementById('selected-folder-path').value = '';
                 localStorage.removeItem('selectedFolderPath'); // Clear saved path if no folder selected
                 localStorage.removeItem('selectedFolderFilesCount');
+                localStorage.removeItem('selectedFolderFileNames');
                 allData = [];
                 addMarkers([], width, height);
                 return;
@@ -594,40 +649,99 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
+        // Create a hidden file input for updating files
+        let updateFolderInput = null;
+        
         // Function to refresh the data from the selected folder
         function refreshData() {
             const selectedFolderPath = document.getElementById('selected-folder-path').value;
-            if (!selectedFolderPath) {
+            const savedFolderPath = localStorage.getItem('selectedFolderPath');
+            
+            if (!selectedFolderPath && savedFolderPath) {
+                // If no folder is currently displayed but we have one saved, update the display
+                document.getElementById('selected-folder-path').value = savedFolderPath;
+            }
+            
+            if (!selectedFolderPath && !savedFolderPath) {
                 alert('Por favor seleccione una carpeta primero en la pestaña de Configuración.');
                 showTab('config');
                 return;
             }
             
-            // Check if we have stored files from a folder selection
-            if (window.storedFolderFiles && window.storedFolderFiles.length > 0) {
-                // Reload from stored files automatically
-                reloadFromStoredFiles(window.storedFolderFiles, currentImageWidth, currentImageHeight);
+            const folderPathToUse = selectedFolderPath || savedFolderPath;
+            
+            // Create a temporary input element to allow re-selection of the same directory
+            if (!updateFolderInput) {
+                updateFolderInput = document.createElement('input');
+                updateFolderInput.type = 'file';
+                updateFolderInput.webkitdirectory = true;
+                updateFolderInput.mozdirectory = true;
+                updateFolderInput.msdirectory = true;
+                updateFolderInput.odirectory = true;
+                updateFolderInput.directory = true;
+                updateFolderInput.multiple = true;
+                updateFolderInput.accept = '.zip';
+                updateFolderInput.style.display = 'none';
                 
-                // Show a message to the user indicating the refresh is complete
-                const refreshMessage = document.createElement('div');
-                refreshMessage.className = 'alert alert-success position-fixed';
-                refreshMessage.style.bottom = '70px';
-                refreshMessage.style.right = '20px';
-                refreshMessage.style.zIndex = '9999';
-                refreshMessage.style.maxWidth = '300px';
-                refreshMessage.innerHTML = '<i class="fas fa-check-circle"></i> Vista actualizada con archivos existentes';
-                
-                document.body.appendChild(refreshMessage);
-                
-                // Remove message after 3 seconds
-                setTimeout(() => {
-                    if (refreshMessage.parentNode) {
-                        refreshMessage.parentNode.removeChild(refreshMessage);
+                // When user selects the same or updated directory
+                updateFolderInput.onchange = function(event) {
+                    const files = Array.from(event.target.files);
+                    const newFolderFiles = files.filter(file => file.name.toLowerCase().endsWith('.zip'));
+                    
+                    if (newFolderFiles.length === 0) {
+                        alert('No se encontraron archivos .zip en la carpeta seleccionada.');
+                        return;
                     }
-                }, 3000);
-            } else {
-                alert('No hay archivos almacenados para recargar. Por favor, seleccione la carpeta nuevamente.');
-                showTab('config');
+                    
+                    // Update the displayed folder path
+                    if (files.length > 0) {
+                        const firstFilePath = files[0].webkitRelativePath;
+                        const folderPath = firstFilePath.substring(0, firstFilePath.indexOf('/')) || firstFilePath.substring(0, firstFilePath.indexOf('\\')) || 'Carpeta seleccionada';
+                        document.getElementById('selected-folder-path').value = folderPath;
+                        
+                        // Update localStorage
+                        localStorage.setItem('selectedFolderPath', folderPath);
+                        localStorage.setItem('selectedFolderFilesCount', files.length);
+                        
+                        const fileNames = files.map(file => file.name);
+                        localStorage.setItem('selectedFolderFileNames', JSON.stringify(fileNames));
+                    }
+                    
+                    // Update stored files for future refreshes
+                    window.storedFolderFiles = newFolderFiles;
+                    
+                    // Reload from the new set of files
+                    reloadFromStoredFiles(newFolderFiles, currentImageWidth, currentImageHeight);
+                    
+                    // Show a message to the user indicating the update is complete
+                    const updateMessage = document.createElement('div');
+                    updateMessage.className = 'alert alert-success position-fixed';
+                    updateMessage.style.bottom = '70px';
+                    updateMessage.style.right = '20px';
+                    updateMessage.style.zIndex = '9999';
+                    updateMessage.style.maxWidth = '300px';
+                    updateMessage.innerHTML = '<i class="fas fa-check-circle"></i> Registros actualizados correctamente';
+                    
+                    document.body.appendChild(updateMessage);
+                    
+                    // Remove message after 3 seconds
+                    setTimeout(() => {
+                        if (updateMessage.parentNode) {
+                            updateMessage.parentNode.removeChild(updateMessage);
+                        }
+                    }, 3000);
+                };
+                
+                document.body.appendChild(updateFolderInput);
+            }
+            
+            // Show a message to the user explaining they need to select the folder again
+            // to pick up any new files
+            const userConfirmed = confirm(`Para actualizar con posibles archivos nuevos, seleccione nuevamente la carpeta:\n${folderPathToUse}\n\n¿Desea seleccionar la carpeta ahora?`);
+            
+            if (userConfirmed) {
+                // Trigger the file selection dialog
+                updateFolderInput.click();
             }
         }
     };
