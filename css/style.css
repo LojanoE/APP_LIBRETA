@@ -104,3 +104,14 @@ html, body {
     border-radius: 5px;
     box-shadow: 0 5px 20px rgba(0,0,0,0.5);
 }
+
+/* Refresh button styles */
+#refresh-btn {
+    opacity: 0.8;
+    transition: opacity 0.3s ease;
+}
+
+#refresh-btn:hover {
+    opacity: 1;
+    transform: scale(1.05);
+}

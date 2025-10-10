@@ -278,6 +278,25 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('workfront-select').addEventListener('change', applyFilters);
     }
     
+    // Function to refresh the data from the selected folder
+    function refreshData() {
+        const selectedFolderPath = document.getElementById('selected-folder-path').value;
+        if (!selectedFolderPath) {
+            alert('Por favor seleccione una carpeta primero en la pestaña de Configuración.');
+            showTab('config');
+            return;
+        }
+        
+        // Check if we have stored files from a folder selection
+        if (window.storedFolderFiles && window.storedFolderFiles.length > 0) {
+            // Reload from stored files
+            reloadFromStoredFiles(window.storedFolderFiles, currentImageWidth, currentImageHeight);
+        } else {
+            alert('No hay archivos almacenados para recargar. Por favor, seleccione la carpeta nuevamente.');
+            showTab('config');
+        }
+    }
+    
     function addMarkers(data, imageWidth, imageHeight) {
         // Store current dimensions for later use
         currentImageWidth = imageWidth;
@@ -423,11 +442,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const folderPath = firstFilePath.substring(0, firstFilePath.indexOf('/')) || firstFilePath.substring(0, firstFilePath.indexOf('\\')) || 'Carpeta seleccionada';
                 document.getElementById('selected-folder-path').value = folderPath;
                 
-                // Save folder path to localStorage
+                // Save folder path and file info to localStorage
                 localStorage.setItem('selectedFolderPath', folderPath);
+                localStorage.setItem('selectedFolderFilesCount', files.length);
             } else {
                 document.getElementById('selected-folder-path').value = '';
                 localStorage.removeItem('selectedFolderPath'); // Clear saved path if no folder selected
+                localStorage.removeItem('selectedFolderFilesCount');
                 allData = [];
                 addMarkers([], width, height);
                 return;
@@ -517,6 +538,97 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         
+        // Add event listener for the refresh button
+        const refreshBtn = document.getElementById('refresh-btn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', refreshData);
+        }
+        
+        // Function to reload data from stored files
+        function reloadFromStoredFiles(storedFiles, imgWidth, imgHeight) {
+            if (!storedFiles || storedFiles.length === 0) {
+                alert('No hay archivos almacenados para recargar.');
+                return;
+            }
+            
+            allData = []; // Reiniciar datos
+            
+            const promises = storedFiles.map(file =>
+                JSZip.loadAsync(file).then(zip => {
+                    const jsonFile = Object.keys(zip.files).find(filename => filename.toLowerCase().endsWith('.json'));
+                    if (!jsonFile) {
+                        console.warn(`No .json file found in ${file.name}`);
+                        return;
+                    }
+                    return zip.file(jsonFile).async('string').then(content => {
+                        try {
+                            const data = JSON.parse(content);
+                            if (Array.isArray(data)) {
+                                data.forEach(item => item.zip = zip); // Augment data
+                                allData = allData.concat(data);
+                            }
+                        } catch (e) {
+                            console.error(`Error parsing JSON from ${file.name}:`, e);
+                        }
+                    });
+                })
+            );
 
+            Promise.all(promises).then(() => {
+                if (allData.length > 0) {
+                    // Remove duplicates based on ID
+                    allData = removeDuplicateIds(allData);
+                    filteredData = [...allData]; // Inicialmente todos los datos filtrados
+                    addMarkers(filteredData, imgWidth, imgHeight);
+                    updateFilterResults(); // Actualizar contador de resultados
+                    showTab('map');
+                    
+                    // Update stored files in case there are new ones
+                    window.storedFolderFiles = storedFiles;
+                } else {
+                    alert('No se encontraron datos de marcadores válidos en los archivos ZIP.');
+                }
+            }).catch(err => {
+                console.error("Error processing ZIP files:", err);
+                alert("Error al leer uno o más archivos ZIP.");
+            });
+        }
+        
+        // Function to refresh the data from the selected folder
+        function refreshData() {
+            const selectedFolderPath = document.getElementById('selected-folder-path').value;
+            if (!selectedFolderPath) {
+                alert('Por favor seleccione una carpeta primero en la pestaña de Configuración.');
+                showTab('config');
+                return;
+            }
+            
+            // Check if we have stored files from a folder selection
+            if (window.storedFolderFiles && window.storedFolderFiles.length > 0) {
+                // Reload from stored files automatically
+                reloadFromStoredFiles(window.storedFolderFiles, currentImageWidth, currentImageHeight);
+                
+                // Show a message to the user indicating the refresh is complete
+                const refreshMessage = document.createElement('div');
+                refreshMessage.className = 'alert alert-success position-fixed';
+                refreshMessage.style.bottom = '70px';
+                refreshMessage.style.right = '20px';
+                refreshMessage.style.zIndex = '9999';
+                refreshMessage.style.maxWidth = '300px';
+                refreshMessage.innerHTML = '<i class="fas fa-check-circle"></i> Vista actualizada con archivos existentes';
+                
+                document.body.appendChild(refreshMessage);
+                
+                // Remove message after 3 seconds
+                setTimeout(() => {
+                    if (refreshMessage.parentNode) {
+                        refreshMessage.parentNode.removeChild(refreshMessage);
+                    }
+                }, 3000);
+            } else {
+                alert('No hay archivos almacenados para recargar. Por favor, seleccione la carpeta nuevamente.');
+                showTab('config');
+            }
+        }
     };
 });
