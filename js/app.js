@@ -1,9 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     const psad56Bounds = {
-        minX: 780470.010,
-        maxX: 782341.423,
-        minY: 9603738.377,
-        maxY: 9602159.372
+        minX: 780288.674,
+        maxX: 782454.261,
+        minY: 9603950.033,
+        maxY: 9602217.563
     };
 
     // Define PSAD56 projection for proj4
